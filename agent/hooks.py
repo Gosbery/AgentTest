@@ -1,8 +1,8 @@
-# hooks.py
+# hooks.py — migrated from root directory
+# PreToolUse / PostToolUse hook system
 
 from dataclasses import dataclass
 from typing import Any, Dict, Literal, Optional
-
 
 HookAction = Literal["continue", "block"]
 
@@ -17,34 +17,24 @@ class HookResult:
 
 def before_tool(tool_name: str, args: Dict[str, Any], context: Dict[str, Any]) -> HookResult:
     """
-    PreToolUse Hook
-
-    工具执行前触发。
-    可以用于：
-    1. 日志
-    2. 参数检查
-    3. 参数修改
-    4. 阻断工具执行
+    PreToolUse Hook — called before tool execution.
+    Uses: logging, parameter checks, parameter modification, blocking.
     """
-
     loop_count = context.get("loop_count")
-
     print(f"[HOOK before_tool] loop={loop_count}, tool={tool_name}, args={args}")
 
-    # 示例：禁止 edit_file 修改 .env 文件
+    # Block .env file modifications
     if tool_name in ["write_file", "edit_file"]:
         path = args.get("path", "")
-
         if path.endswith(".env") or ".env" in path:
             return HookResult(
                 action="block",
                 reason="Hook blocked: editing .env files is not allowed.",
             )
 
-    # 示例：禁止 read_file 读取 .env 文件
+    # Block .env file reads
     if tool_name == "read_file":
         path = args.get("path", "")
-
         if path.endswith(".env") or ".env" in path:
             return HookResult(
                 action="block",
@@ -61,26 +51,18 @@ def after_tool(
     context: Dict[str, Any],
 ) -> HookResult:
     """
-    PostToolUse Hook
-
-    工具执行后触发。
-    可以用于：
-    1. 日志
-    2. 审计
-    3. 自动格式化
-    4. 修改 tool result
+    PostToolUse Hook — called after tool execution.
+    Uses: logging, audit, auto-formatting, result modification.
     """
-
     loop_count = context.get("loop_count")
-
     print(f"[HOOK after_tool] loop={loop_count}, tool={tool_name}, result={result}")
 
-    # todo_write 成功后打印任务进度
+    # Print TODO progress on success
     if tool_name == "todo_write" and isinstance(result, dict) and result.get("ok"):
         todos_info = result.get("result", "")
         print(f"[TODO] {todos_info}")
 
-    # 示例：给 edit_file 成功结果追加审计信息
+    # Audit info for edit_file
     if tool_name == "edit_file":
         result = {
             "ok": True,

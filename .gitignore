@@ -34,3 +34,6 @@ build/
 
 # Claude Code / Agent
 .trae/
+
+# Agent runtime
+.tasks/
