@@ -124,14 +124,16 @@ def spawn_subagent(description: str) -> str:
 
         messages.extend(results)
 
-    # Extract final text summary
-    result = _extract_text(messages[-1].get("content", ""))
-    if not result:
-        for msg in reversed(messages):
-            if msg.get("role") == "assistant":
-                result = _extract_text(msg.get("content", ""))
-                if result:
-                    break
+    # Extract final text summary — find the last assistant message WITHOUT tool calls
+    # (that's the true final answer, not an intermediate "let me continue" response)
+    result = ""
+    for msg in reversed(messages):
+        if msg.get("role") == "assistant":
+            text = _extract_text(msg.get("content", ""))
+            if text:
+                result = text
+                break
+
     if not result:
         result = "Subagent stopped after 30 turns without final answer."
 

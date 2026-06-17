@@ -8,15 +8,26 @@ Exports:
 
 import json
 
+from agent.skill_loader import SkillLoader
 from agent.llm import call_llm
 from agent.tools import TOOLS, TOOL_SCHEMAS, make_tool_schema
+from agent.tools.skill import make_load_skill, make_load_skill_schema
 from agent.hooks import before_tool, after_tool
 from agent.permissions import check_permission
 from agent.subagent import spawn_subagent
 
+# Initialize skill loader at module level
+_skill_loader = SkillLoader()
+
+# Build the skill menu for the system prompt (Layer 1)
+_skill_menu_lines = _skill_loader.get_skill_descriptions()
+SKILL_MENU = ""
+if _skill_menu_lines:
+    menu_items = [f"- {name}: {desc}" for name, desc in sorted(_skill_menu_lines.items())]
+    SKILL_MENU = "\n".join(menu_items)
 
 # System prompt for the main agent
-SYSTEM_PROMPT = """
+SYSTEM_PROMPT = f"""
 你是一个 Claude Code 风格的编程 Agent。
 你可以通过工具完成任务。需要外部信息时，优先调用工具，不要猜测。
 拿到工具结果后，再继续判断是否需要下一步工具。
@@ -24,7 +35,14 @@ SYSTEM_PROMPT = """
 
 重要：在开始执行复杂任务之前，先使用 todo_write 工具列出所有步骤，规划好再动手。
 对于复杂的子任务，使用 task 工具委派给子 Agent。
+
+{"Skills available:" if SKILL_MENU else ""}
+{SKILL_MENU}
 """
+
+# Create the load_skill tool and schema
+_load_skill_func = make_load_skill(_skill_loader)
+_load_skill_schema = make_load_skill_schema(_skill_loader)
 
 
 # Add task tool to parent's tools
@@ -35,8 +53,8 @@ TASK_TOOL_SCHEMA = make_tool_schema(
     ["description"],
 )
 
-ALL_TOOLS = {**TOOLS, "task": spawn_subagent}
-ALL_TOOL_SCHEMAS = TOOL_SCHEMAS + [TASK_TOOL_SCHEMA]
+ALL_TOOLS = {**TOOLS, "task": spawn_subagent, "load_skill": _load_skill_func}
+ALL_TOOL_SCHEMAS = TOOL_SCHEMAS + [TASK_TOOL_SCHEMA, _load_skill_schema]
 
 
 def _append_tool_result(messages: list, tool_call_id: str, result) -> None:

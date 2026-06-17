@@ -41,6 +41,15 @@ def before_tool(tool_name: str, args: Dict[str, Any], context: Dict[str, Any]) -
                 reason="Hook blocked: reading .env files is not allowed.",
             )
 
+    # Block bash commands that reference .env files
+    if tool_name == "run_bash":
+        cmd = args.get("command", "")
+        if ".env" in cmd:
+            return HookResult(
+                action="block",
+                reason="Hook blocked: bash commands referencing .env files are not allowed.",
+            )
+
     return HookResult(action="continue", args=args)
 
 
