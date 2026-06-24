@@ -9,6 +9,8 @@ PERMISSIONS = {
     "write_file": "allow",
     "edit_file": "allow",
     "task": "allow",
+    "load_skill": "allow",
+    "compact": "allow",
 
     "delete_file": "deny",
 }

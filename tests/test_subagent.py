@@ -54,7 +54,13 @@ Subagent 边界测试脚本 — 完整覆盖所有设计决策和边界条件。
 ================================================================================
 """
 
+import sys
 import json
+from pathlib import Path
+
+# 添加项目根目录到路径
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 from agent.subagent.runner import (
     spawn_subagent,
     SUB_TOOLS,

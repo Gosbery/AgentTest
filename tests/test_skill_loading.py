@@ -8,6 +8,12 @@ Skill Loading 测试脚本 — 验证两层注入策略。
 3. 不存在的 skill 是否返回错误信息
 """
 
+import sys
+from pathlib import Path
+
+# 添加项目根目录到路径
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 from agent.skill_loader import SkillLoader
 from agent.tools.skill import make_load_skill, make_load_skill_schema
 

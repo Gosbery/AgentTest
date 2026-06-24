@@ -1,9 +1,11 @@
 plan.md
+
 # Python
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
+*.egg-info/
 
 # Virtual Env
 venv/
@@ -17,23 +19,37 @@ env/
 # IDE
 .vscode/
 .idea/
+*.swp
+*.swo
 
 # OS
 .DS_Store
 Thumbs.db
+desktop.ini
 
 # Logs
 *.log
 
-# Build
+# Build / Distribution
 dist/
 build/
+*.egg
+.eggs/
 
-# Testing
+# Testing / Coverage
 .pytest_cache/
+htmlcov/
+.coverage
+coverage.xml
 
 # Claude Code / Agent
 .trae/
 
 # Agent runtime
 .tasks/
+.memory/
+.transcripts/
+
+# Misc
+*.bak
+*.tmp

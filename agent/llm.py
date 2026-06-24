@@ -15,7 +15,7 @@ def call_llm(messages: list, tools: list, system_prompt: str = None) -> object:
         system_prompt: optional system prompt
 
     Returns:
-        The assistant message object with .content and .tool_calls
+        The assistant messages object with .content and .tool_calls
     """
     sys_messages = messages
     if system_prompt:

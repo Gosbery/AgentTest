@@ -1,8 +1,8 @@
-# hooks.py — migrated from root directory
-# PreToolUse / PostToolUse hook system
+# hooks.py
 
 from dataclasses import dataclass
 from typing import Any, Dict, Literal, Optional
+
 
 HookAction = Literal["continue", "block"]
 
@@ -17,42 +17,43 @@ class HookResult:
 
 def before_tool(tool_name: str, args: Dict[str, Any], context: Dict[str, Any]) -> HookResult:
     """
-    PreToolUse Hook — called before tool execution.
-    Uses: logging, parameter checks, parameter modification, blocking.
+    PreToolUse Hook
+
+    工具执行前触发。
+    可以用于：
+    1. 日志
+    2. 参数检查
+    3. 参数修改
+    4. 阻断工具执行
     """
+
     loop_count = context.get("loop_count")
+
     print(f"[HOOK before_tool] loop={loop_count}, tool={tool_name}, args={args}")
 
-    # Block .env file modifications
+    # 示例：禁止 edit_file 修改 .env 文件
     if tool_name in ["write_file", "edit_file"]:
         path = args.get("path", "")
+
         if path.endswith(".env") or ".env" in path:
             return HookResult(
                 action="block",
                 reason="Hook blocked: editing .env files is not allowed.",
             )
 
-    # Block .env file reads
+    # 示例：禁止 read_file 读取 .env 文件
     if tool_name == "read_file":
         path = args.get("path", "")
+
         if path.endswith(".env") or ".env" in path:
             return HookResult(
                 action="block",
                 reason="Hook blocked: reading .env files is not allowed.",
             )
 
-    # Block bash commands that reference .env files
-    if tool_name == "run_bash":
-        cmd = args.get("command", "")
-        if ".env" in cmd:
-            return HookResult(
-                action="block",
-                reason="Hook blocked: bash commands referencing .env files are not allowed.",
-            )
-
     return HookResult(action="continue", args=args)
 
-
+  
 def after_tool(
     tool_name: str,
     args: Dict[str, Any],
@@ -60,18 +61,26 @@ def after_tool(
     context: Dict[str, Any],
 ) -> HookResult:
     """
-    PostToolUse Hook — called after tool execution.
-    Uses: logging, audit, auto-formatting, result modification.
-    """
-    loop_count = context.get("loop_count")
-    print(f"[HOOK after_tool] loop={loop_count}, tool={tool_name}, result_type={type(result).__name__}")
+    PostToolUse Hook
 
-    # Print TODO progress on success
+    工具执行后触发。
+    可以用于：
+    1. 日志
+    2. 审计
+    3. 自动格式化
+    4. 修改 tool result
+    """
+
+    loop_count = context.get("loop_count")
+
+    print(f"[HOOK after_tool] loop={loop_count}, tool={tool_name}, result={result}")
+
+    # todo_write 成功后打印任务进度
     if tool_name == "todo_write" and isinstance(result, dict) and result.get("ok"):
         todos_info = result.get("result", "")
         print(f"[TODO] {todos_info}")
 
-    # Audit info for edit_file
+    # 示例：给 edit_file 成功结果追加审计信息
     if tool_name == "edit_file":
         result = {
             "ok": True,
