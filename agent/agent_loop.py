@@ -17,11 +17,23 @@ from agent.permissions import check_permission
 from agent.subagent import spawn_subagent
 from agent.compact import (
     apply_compression,
-    reactive_compact,
+    reactive_compact as compact_reactive_compact,
     compact_history,
     compact_tool,
     COMPACT_TOOL_SCHEMA,
     MAX_REACTIVE_RETRIES,
+)
+from agent.error_recovery import (
+    RecoveryState,
+    with_retry,
+    is_prompt_too_long_error,
+    reactive_compact,
+)
+from agent.config import (
+    DEFAULT_MAX_TOKENS,
+    ESCALATED_MAX_TOKENS,
+    MAX_RECOVERY_RETRIES,
+    CONTINUATION_PROMPT,
 )
 from agent.memory import (
     load_memories,
@@ -130,16 +142,23 @@ def agent_loop(messages: list) -> None:
     Main agent loop. Modifies messages in place.
 
     Flow:
-        Memory Load → Compression → User → LLM → Tool Selection → Permission Check
-        → before_tool Hook → Tool Execute → after_tool Hook
-        → Tool Result appended → LLM Replan / Final Answer
-        → (on exit) Memory Extract + Consolidate
+        Memory Load → Compression → User → [try] LLM [except] -> Tool Selection
+        -> Permission Check -> before_tool Hook -> Tool Execute -> after_tool Hook
+        -> Tool Result appended -> LLM Replan / Final Answer
+        -> (on exit) Memory Extract + Consolidate
+        
+    Error Recovery (s11):
+        - Path 1: max_tokens -> escalate 8K->64K, then continuation prompt (max 3)
+        - Path 2: prompt_too_long -> reactive compact -> retry (once)
+        - Path 3: 429/529 -> exponential backoff with jitter (max 10), fallback model
     """
     global _prompt_context
     loop_count = 0
     rounds_since_todo = 0
-    reactive_retries = 0
-    compact_failures = 0
+    
+    # s11: Error recovery state
+    recovery_state = RecoveryState()
+    max_tokens = DEFAULT_MAX_TOKENS
 
     while True:
         loop_count += 1
@@ -164,29 +183,62 @@ def agent_loop(messages: list) -> None:
             })
             rounds_since_todo = 0
 
+        # ── LLM call: with_retry handles 429/529, outer handles rest ──
         try:
-            response = call_llm(messages, ALL_TOOL_SCHEMAS, system_prompt)
-            # Reset reactive retries on successful call
-            reactive_retries = 0
+            response = with_retry(
+                lambda mt=max_tokens, mdl=recovery_state.current_model: 
+                    call_llm(messages, ALL_TOOL_SCHEMAS, system_prompt, model=mdl, max_tokens=mt),
+                recovery_state
+            )
+            # Extract message from response
+            message = response.choices[0].message
+            finish_reason = response.choices[0].finish_reason
+            
         except Exception as e:
-            # Check if it's a prompt_too_long error
-            error_str = str(e).lower()
-            if "prompt_too_long" in error_str or "context_length" in error_str or "maximum context" in error_str:
-                if reactive_retries < MAX_REACTIVE_RETRIES:
-                    print(f"[Reactive compact] API error: {e}")
+            # Path 2: prompt_too_long -> reactive compact (once)
+            if is_prompt_too_long_error(e):
+                if not recovery_state.has_attempted_reactive_compact:
+                    print(f"  \033[31m[prompt_too_long] {str(e)[:100]}\033[0m")
                     messages[:] = reactive_compact(messages)
-                    reactive_retries += 1
+                    recovery_state.has_attempted_reactive_compact = True
                     continue
-                else:
-                    print(f"[Fatal] Max reactive retries exceeded: {e}")
-                    raise
-            else:
-                raise
+                print("  \033[31m[unrecoverable] still too long after compact\033[0m")
+                messages.append({"role": "assistant", "content": 
+                    "[Error] Context too large, cannot continue."})
+                return
+            # Unrecoverable
+            name = type(e).__name__
+            print(f"  \033[31m[unrecoverable] {name}: {str(e)[:100]}\033[0m")
+            messages.append({"role": "assistant", "content": 
+                f"[Error] {name}: {str(e)[:200]}"})
+            return
 
-        messages.append({"role": "assistant", "content": response.content})
+        # ── Path 1: max_tokens -> escalate or continue ──
+        # OpenAI API uses finish_reason="length" for truncation
+        if finish_reason == "length":
+            # First escalation: don't append truncated output, retry same request
+            if not recovery_state.has_escalated:
+                max_tokens = ESCALATED_MAX_TOKENS
+                recovery_state.has_escalated = True
+                print(f"  \033[33m[max_tokens] escalating "
+                      f"{DEFAULT_MAX_TOKENS} -> {ESCALATED_MAX_TOKENS}\033[0m")
+                continue
+            # 64K still truncated: save truncated output + continuation prompt
+            messages.append({"role": "assistant", "content": message.content})
+            if recovery_state.recovery_count < MAX_RECOVERY_RETRIES:
+                messages.append({"role": "user", "content": CONTINUATION_PROMPT})
+                recovery_state.recovery_count += 1
+                print(f"  \033[33m[max_tokens] continuation "
+                      f"{recovery_state.recovery_count}/{MAX_RECOVERY_RETRIES}\033[0m")
+                continue
+            print("  \033[31m[max_tokens] recovery limit reached\033[0m")
+            return
+        
+        # Normal completion: append assistant response
+        messages.append({"role": "assistant", "content": message.content})
 
         # No tool calls → final answer
-        if not response.tool_calls:
+        if not message.tool_calls:
             print("\n[AGENT] Final response, no more tool calls")
             # Extract memories from this turn and consolidate if needed
             extract_memories(messages)
@@ -194,10 +246,10 @@ def agent_loop(messages: list) -> None:
             return
 
         # Debug: print tool calls
-        for tc in response.tool_calls:
+        for tc in message.tool_calls:
             print(f"\n[LLM>Tool] {tc.function.name} | args: {tc.function.arguments}")
 
-        for tc in response.tool_calls:
+        for tc in message.tool_calls:
             tool_name = tc.function.name
             try:
                 args = json.loads(tc.function.arguments)

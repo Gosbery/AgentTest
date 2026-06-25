@@ -5,6 +5,9 @@ Tool registry — aggregates all tool functions and their OpenAI-compatible sche
 from agent.tools.filesystem import read_file, write_file, edit_file, glob_files, list_dir
 from agent.tools.shell import run_bash
 from agent.tools.todo import run_todo_write
+from agent.tools.task_system import (
+    create_task, list_tasks, get_task, claim_task, complete_task
+)
 
 
 # Function registry: name -> callable
@@ -16,6 +19,11 @@ TOOLS = {
     "glob_files": glob_files,
     "run_bash": run_bash,
     "todo_write": run_todo_write,
+    "create_task": create_task,
+    "list_tasks": list_tasks,
+    "get_task": get_task,
+    "claim_task": claim_task,
+    "complete_task": complete_task,
 }
 
 
@@ -133,6 +141,80 @@ TOOL_SCHEMAS = [
                     },
                 },
                 "required": ["todos"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "create_task",
+            "description": "Create a new persistent task with optional dependencies. Tasks are saved to .tasks/ directory and persist across sessions.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "subject": {"type": "string", "description": "Short title of the task"},
+                    "description": {"type": "string", "description": "Detailed description of the task"},
+                    "blockedBy": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "List of task IDs that must be completed before this task can start"
+                    },
+                },
+                "required": ["subject"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_tasks",
+            "description": "List all tasks with their current status, owner, and dependencies.",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_task",
+            "description": "Get full details of a specific task including description and dependencies.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "task_id": {"type": "string", "description": "The task ID to retrieve"},
+                },
+                "required": ["task_id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "claim_task",
+            "description": "Claim a task to start working on it. Sets owner and changes status to in_progress. Fails if dependencies are not met.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "task_id": {"type": "string", "description": "The task ID to claim"},
+                    "owner": {"type": "string", "description": "Name of the agent claiming the task", "default": "agent"},
+                },
+                "required": ["task_id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "complete_task",
+            "description": "Mark a task as completed and unlock any downstream tasks that were blocked by it.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "task_id": {"type": "string", "description": "The task ID to complete"},
+                },
+                "required": ["task_id"],
             },
         },
     },
