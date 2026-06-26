@@ -8,6 +8,7 @@ from agent.tools.todo import run_todo_write
 from agent.tools.task_system import (
     create_task, list_tasks, get_task, claim_task, complete_task
 )
+from agent.tools.cron_scheduler import schedule_job, cancel_job, list_jobs
 
 
 # Function registry: name -> callable
@@ -24,6 +25,9 @@ TOOLS = {
     "get_task": get_task,
     "claim_task": claim_task,
     "complete_task": complete_task,
+    "schedule_cron": schedule_job,
+    "list_crons": list_jobs,
+    "cancel_cron": cancel_job,
 }
 
 
@@ -111,7 +115,11 @@ TOOL_SCHEMAS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "command": {"type": "string", "description": "要执行的命令"}
+                    "command": {"type": "string", "description": "要执行的命令"},
+                    "run_in_background": {
+                        "type": "boolean",
+                        "description": "If true, run the command in background and continue processing other tasks. Use for slow operations like install, build, test.",
+                    },
                 },
                 "required": ["command"],
             },
@@ -215,6 +223,60 @@ TOOL_SCHEMAS = [
                     "task_id": {"type": "string", "description": "The task ID to complete"},
                 },
                 "required": ["task_id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "schedule_cron",
+            "description": "Schedule a recurring or one-shot cron job. The prompt will be injected to the agent when the cron expression matches.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "cron": {
+                        "type": "string",
+                        "description": "5-field cron expression: minute hour day month weekday (e.g. '0 9 * * *' for daily 9am)",
+                    },
+                    "prompt": {
+                        "type": "string",
+                        "description": "The message to inject to the agent when triggered",
+                    },
+                    "recurring": {
+                        "type": "boolean",
+                        "description": "True for recurring, False for one-shot (default True)",
+                    },
+                    "durable": {
+                        "type": "boolean",
+                        "description": "True to persist across restarts (default True)",
+                    },
+                },
+                "required": ["cron", "prompt"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_crons",
+            "description": "List all scheduled cron jobs with their status.",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "cancel_cron",
+            "description": "Cancel a scheduled cron job by ID.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "job_id": {"type": "string", "description": "The cron job ID to cancel"},
+                },
+                "required": ["job_id"],
             },
         },
     },

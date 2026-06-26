@@ -11,6 +11,11 @@ import json
 from agent.skill_loader import SkillLoader
 from agent.llm import call_llm
 from agent.tools import TOOLS, TOOL_SCHEMAS, make_tool_schema
+from agent.tools.background_tasks import (
+    should_run_background,
+    start_background_task,
+    collect_background_results,
+)
 from agent.tools.skill import make_load_skill, make_load_skill_schema
 from agent.hooks import before_tool, after_tool
 from agent.permissions import check_permission
@@ -279,15 +284,20 @@ def agent_loop(messages: list) -> None:
             if pre_result.args is not None:
                 args = pre_result.args
 
-            # 3. Execute tool
+            # 3. Execute tool (sync or background)
             print(f"[TOOL EXEC] {tool_name}({args})")
-            tool_func = ALL_TOOLS.get(tool_name)
-            try:
-                output = tool_func(**args) if tool_func else f"Unknown: {tool_name}"
+            if should_run_background(tool_name, args):
+                bg_id = start_background_task(tc.id, tool_name, args)
+                output = f"[Background task {bg_id} started] Result will be available when complete."
                 tool_result = {"ok": True, "result": output}
-            except Exception as e:
-                tool_result = {"ok": False, "error": str(e)}
-                print(f"[TOOL ERROR] {tool_name}: {e}")
+            else:
+                tool_func = ALL_TOOLS.get(tool_name)
+                try:
+                    output = tool_func(**args) if tool_func else f"Unknown: {tool_name}"
+                    tool_result = {"ok": True, "result": output}
+                except Exception as e:
+                    tool_result = {"ok": False, "error": str(e)}
+                    print(f"[TOOL ERROR] {tool_name}: {e}")
 
             # Handle compact tool specially
             if tool_name == "compact":
@@ -313,3 +323,12 @@ def agent_loop(messages: list) -> None:
             print(f"[TOOL RESULT] {tool_name} => {result_preview}...")
 
             _append_tool_result(messages, tc.id, tool_result)
+
+        # ── Collect background task notifications ──
+        bg_notifications = collect_background_results()
+        if bg_notifications:
+            user_content = []
+            for notif in bg_notifications:
+                user_content.append({"type": "text", "text": notif})
+            messages.append({"role": "user", "content": user_content})
+            print(f"[BG] Injected {len(bg_notifications)} background task notification(s)")
