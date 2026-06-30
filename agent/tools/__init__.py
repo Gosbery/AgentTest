@@ -9,6 +9,11 @@ from agent.tools.task_system import (
     create_task, list_tasks, get_task, claim_task, complete_task
 )
 from agent.tools.cron_scheduler import schedule_job, cancel_job, list_jobs
+from agent.tools.agent_teams import (
+    spawn_teammate_thread,
+    run_send_message,
+    run_check_inbox,
+)
 
 
 # Function registry: name -> callable
@@ -28,6 +33,9 @@ TOOLS = {
     "schedule_cron": schedule_job,
     "list_crons": list_jobs,
     "cancel_cron": cancel_job,
+    "spawn_teammate": spawn_teammate_thread,
+    "send_message": run_send_message,
+    "check_inbox": run_check_inbox,
 }
 
 
@@ -277,6 +285,51 @@ TOOL_SCHEMAS = [
                     "job_id": {"type": "string", "description": "The cron job ID to cancel"},
                 },
                 "required": ["job_id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "spawn_teammate",
+            "description": "Spawn a teammate agent to work on a task in parallel. The teammate runs in its own thread with simplified tools (bash, read, write, send_message).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Unique name for the teammate (e.g., 'alice', 'bob')"},
+                    "role": {"type": "string", "description": "Role description (e.g., 'backend developer', 'tester')"},
+                    "prompt": {"type": "string", "description": "Task description for the teammate"},
+                },
+                "required": ["name", "role", "prompt"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "send_message",
+            "description": "Send a message to another agent (teammate or lead).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "to_agent": {"type": "string", "description": "Recipient agent name (e.g., 'alice', 'lead')"},
+                    "content": {"type": "string", "description": "Message content"},
+                },
+                "required": ["to_agent", "content"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "check_inbox",
+            "description": "Check your inbox for messages from teammates. Messages are consumed (deleted) after reading.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "agent": {"type": "string", "description": "Agent name to check inbox for (usually 'lead')"},
+                },
+                "required": ["agent"],
             },
         },
     },

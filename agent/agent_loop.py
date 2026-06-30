@@ -16,6 +16,7 @@ from agent.tools.background_tasks import (
     start_background_task,
     collect_background_results,
 )
+from agent.tools.agent_teams import collect_teammate_messages
 from agent.tools.skill import make_load_skill, make_load_skill_schema
 from agent.hooks import before_tool, after_tool
 from agent.permissions import check_permission
@@ -332,3 +333,12 @@ def agent_loop(messages: list) -> None:
                 user_content.append({"type": "text", "text": notif})
             messages.append({"role": "user", "content": user_content})
             print(f"[BG] Injected {len(bg_notifications)} background task notification(s)")
+
+        # ── Collect teammate messages (s15) ──
+        teammate_notifications = collect_teammate_messages()
+        if teammate_notifications:
+            user_content = []
+            for notif in teammate_notifications:
+                user_content.append({"type": "text", "text": notif})
+            messages.append({"role": "user", "content": user_content})
+            print(f"[TEAM] Injected {len(teammate_notifications)} teammate message(s)")
