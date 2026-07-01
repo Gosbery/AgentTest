@@ -30,6 +30,7 @@ class Task:
     status: str          # pending | in_progress | completed
     owner: str | None    # Agent 名（多 Agent 场景）
     blockedBy: list[str] # 依赖的任务 ID 列表
+    worktree: str | None = None  # s18: 绑定的 worktree 名称
 
 
 # ============================================================================

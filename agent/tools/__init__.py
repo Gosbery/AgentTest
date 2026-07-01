@@ -13,6 +13,8 @@ from agent.tools.agent_teams import (
     spawn_teammate_thread,
     run_send_message,
     run_check_inbox,
+    run_request_shutdown,
+    run_review_plan,
 )
 
 
@@ -36,6 +38,8 @@ TOOLS = {
     "spawn_teammate": spawn_teammate_thread,
     "send_message": run_send_message,
     "check_inbox": run_check_inbox,
+    "request_shutdown": run_request_shutdown,
+    "review_plan": run_review_plan,
 }
 
 
@@ -323,13 +327,43 @@ TOOL_SCHEMAS = [
         "type": "function",
         "function": {
             "name": "check_inbox",
-            "description": "Check your inbox for messages from teammates. Messages are consumed (deleted) after reading.",
+            "description": "Check your inbox for messages from teammates. Messages are consumed (deleted) after reading. Protocol messages are automatically routed.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "agent": {"type": "string", "description": "Agent name to check inbox for (usually 'lead')"},
+                    "agent": {"type": "string", "description": "Agent name to check inbox for (default 'lead')"},
                 },
-                "required": ["agent"],
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "request_shutdown",
+            "description": "Request a teammate to shut down gracefully. Creates a shutdown_request protocol with a unique request_id. The teammate will respond with shutdown_response to confirm.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "teammate": {"type": "string", "description": "Name of the teammate to shut down"},
+                },
+                "required": ["teammate"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "review_plan",
+            "description": "Review and approve/reject a plan submitted by a teammate. Uses the request_id from the plan_approval_request to match the response.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "request_id": {"type": "string", "description": "The request_id from the plan_approval_request"},
+                    "approve": {"type": "boolean", "description": "True to approve, false to reject"},
+                    "feedback": {"type": "string", "description": "Optional feedback or instructions for the teammate"},
+                },
+                "required": ["request_id", "approve"],
             },
         },
     },
